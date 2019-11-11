@@ -5,12 +5,13 @@ from   selenium                      import webdriver
 from   selenium.webdriver.common.by  import By
 from   selenium.webdriver.support.ui import WebDriverWait
 from   selenium.webdriver.support    import expected_conditions as EC
+from   selenium.webdriver.chrome.options import Options
 
-LOCAL_PATH        = r'/Users/jieyang/Desktop/LinkedinMsg/'
+LOCAL_PATH        = r'/Users/jieyang/Desktop/LinkedInMessenger/'
 ALL_CONTACTS      = r'contact.csv'
 TARGET_CONTACTS   = r'target.csv'
 DELETE_CONTACTS   = r'delete_contact.csv'
-SCROLL_PAUSE_TIME = 2.5
+SCROLL_PAUSE_TIME = 3
 
 class LinkedinMsg(object):
 
@@ -24,13 +25,13 @@ class LinkedinMsg(object):
         self.password = password
         self.driverPath = driverPath
 
-    # def url_generator(self):
-    #
-    #     return r'https://www.linkedin.com/' #mynetwork/invite-connect/connections/'
-
     def init_driver(self):
         """Initializes instance of webdriver"""
-        self.driver = webdriver.Chrome(executable_path=self.driverPath)
+        options = Options()
+        options.add_argument('--headless')
+        options.add_argument('--disable-gpu') 
+        self.driver = webdriver.Chrome(executable_path=self.driverPath, chrome_options=options)
+        #self.driver = webdriver.Chrome(self.driverPath)
         self.driver.wait = WebDriverWait(self.driver, SCROLL_PAUSE_TIME)
         return self.driver
 
@@ -60,13 +61,15 @@ class LinkedinMsg(object):
 
     def _go_to_connection(self):
 
-        connection_btn = self.driver.find_element_by_id('mynetwork-tab-icon')
-        connection_btn.click()
+        self.driver.get(r"https://www.linkedin.com/mynetwork/invite-connect/connections/")
 
-        time.sleep(SCROLL_PAUSE_TIME)
+        #connection_btn = self.driver.find_element_by_id('mynetwork-tab-icon')
+        #connection_btn.click()
 
-        connection_btn1 = self.driver.find_element_by_class_name('mn-community-summary__sub-section')
-        connection_btn1.click()
+        #time.sleep(SCROLL_PAUSE_TIME)
+
+        #connection_btn1 = self.driver.find_element_by_class_name('mn-community-summary__sub-section')
+        #connection_btn1.click()
 
         time.sleep(SCROLL_PAUSE_TIME)
 
@@ -84,19 +87,46 @@ class LinkedinMsg(object):
         # Get scroll height
         last_height = self.driver.execute_script("return document.body.scrollHeight")
 
-        while True:
-            # Scroll down to bottom
-            self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+#        while True:
+#            # Scroll down to bottom
+#            self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+#
+#            # Wait to load page
+#            time.sleep(SCROLL_PAUSE_TIME * 5)
+#
+#            # Calculate new scroll height and compare with last scroll height
+#            new_height = self.driver.execute_script("return document.body.scrollHeight")
+#            if new_height == last_height:
+#                logging.info('Reach the bottom of the page.')
+#                break
+#            last_height = new_height
 
-            # Wait to load page
-            time.sleep(SCROLL_PAUSE_TIME * 4)
+#        x = self.driver.find_element_by_css_selector(".mn-connections__header")
+#        num_of_connect = x.find_element_by_css_selector(".t-18.t-black.t-normal").text
+#
+#        iter = int(num_of_connect.split(' ')[0].replace(',','')) / 20
+#        logging.warning('{} of iteration'.format(iter))
+#
+#        while iter >= 0:
+#            # Scroll down to bottom
+#            self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+#
+#            # Wait to load page
+#            time.sleep(SCROLL_PAUSE_TIME)
+#
+#            iter -= 1
 
-            # Calculate new scroll height and compare with last scroll height
-            new_height = self.driver.execute_script("return document.body.scrollHeight")
-            if new_height == last_height:
-                logging.warning('Reach the bottom of the page.')
-                break
-            last_height = new_height
+        counter = 1
+        lenOfPage = self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);var lenOfPage=document.body.scrollHeight;return lenOfPage;")
+        match=False
+        while (match == False):
+            lastCount = lenOfPage
+            time.sleep(SCROLL_PAUSE_TIME * 2)
+            lenOfPage = self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);var lenOfPage=document.body.scrollHeight;return lenOfPage;")
+            logging.warning('Iteration {}'.format(counter))
+            counter += 1
+            if lastCount==lenOfPage:
+                match=True
 
         logging.warning('Start getting all contacts.')
 
