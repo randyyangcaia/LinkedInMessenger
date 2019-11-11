@@ -1,43 +1,50 @@
 import time
 import pandas
 import logging
-from   selenium                      import webdriver
-from   selenium.webdriver.common.by  import By
-from   selenium.webdriver.support.ui import WebDriverWait
-from   selenium.webdriver.support    import expected_conditions as EC
+from   config                            import *
+from   MsgTemplate                       import MsgTemplate
+from   selenium                          import webdriver
+from   selenium.webdriver.common.by      import By
+from   selenium.webdriver.support.ui     import WebDriverWait
+from   selenium.webdriver.support        import expected_conditions as EC
 from   selenium.webdriver.chrome.options import Options
 
-LOCAL_PATH        = r'/Users/jieyang/Desktop/LinkedInMessenger/'
-ALL_CONTACTS      = r'contact.csv'
-TARGET_CONTACTS   = r'target.csv'
-DELETE_CONTACTS   = r'delete_contact.csv'
-SCROLL_PAUSE_TIME = 3
-
-class LinkedinMsg(object):
+class LinkedInMessenger(object):
 
     def __init__(self,
                  username,
                  password,
                  driverPath,
+                 headless = True
                  ):
 
-        self.username = username
-        self.password = password
+        self.username   = username
+        self.password   = password
         self.driverPath = driverPath
+        self.headless   = headless 
 
     def init_driver(self):
-        """Initializes instance of webdriver"""
-        options = Options()
-        options.add_argument('--headless')
-        options.add_argument('--disable-gpu') 
-        self.driver = webdriver.Chrome(executable_path=self.driverPath, chrome_options=options)
-        #self.driver = webdriver.Chrome(self.driverPath)
+        """
+        Initializes instance of webdriver
+        """
+        
+        if self.headless:
+            options = Options()
+            options.add_argument('--headless')
+            options.add_argument('--disable-gpu') 
+            self.driver = webdriver.Chrome(executable_path=self.driverPath, chrome_options=options)
+        else:
+            self.driver = webdriver.Chrome(self.driverPath)
+        
         self.driver.wait = WebDriverWait(self.driver, SCROLL_PAUSE_TIME)
         return self.driver
 
     def login(self):
-        """Logs into LinkedIn.com"""
-        self.driver.get(r"https://www.linkedin.com/login?trk=guest_homepage-basic_nav-header-signin")
+        """
+        Logs into LinkedIn.com
+        """
+        
+        self.driver.get(LINKEDIN_LOGIN)
         try:
             user_field = WebDriverWait(self.driver, SCROLL_PAUSE_TIME).until(
                 EC.presence_of_element_located((By.ID, 'username')))
@@ -61,16 +68,7 @@ class LinkedinMsg(object):
 
     def _go_to_connection(self):
 
-        self.driver.get(r"https://www.linkedin.com/mynetwork/invite-connect/connections/")
-
-        #connection_btn = self.driver.find_element_by_id('mynetwork-tab-icon')
-        #connection_btn.click()
-
-        #time.sleep(SCROLL_PAUSE_TIME)
-
-        #connection_btn1 = self.driver.find_element_by_class_name('mn-community-summary__sub-section')
-        #connection_btn1.click()
-
+        self.driver.get(LINKEDIN_CONNECTION)
         time.sleep(SCROLL_PAUSE_TIME)
 
     def _go_to_message(self):
@@ -79,57 +77,47 @@ class LinkedinMsg(object):
         connection_btn.click()
 
         time.sleep(SCROLL_PAUSE_TIME)
+    
+    @staticmethod
+    def scroll_to_bottom(driver, component = None):
+        
+        scroll_action = "window.scrollTo(0, document.body.scrollHeight);var lenOfPage=document.body.scrollHeight;return lenOfPage;"
+        counter = 1
+        if component:
+            len_of_page = driver.execute_script(scroll_action, component)
+        else:
+            len_of_page = driver.execute_script(scroll_action)
+        match = False
+
+        while (match == False):
+
+            last_count = len_of_page
+            time.sleep(SCROLL_PAUSE_TIME * 2)
+            
+            if component:
+                len_of_page = driver.execute_script(scroll_action, component)
+            else:
+                len_of_page = driver.execute_script(scroll_action)
+            
+            logging.warning('Iteration {}'.format(counter))
+            counter += 1
+            match = last_count == len_of_page
+
+        logging.warning('Scroll to the bottom.')
+
 
     def retrieve_all_connection(self, rerun = 'Yes'):
+        """
+        Retrieve all connection from LinkedIn Connection webpage
+        """
 
         self._go_to_connection()
 
-        # Get scroll height
-        last_height = self.driver.execute_script("return document.body.scrollHeight")
-
-#        while True:
-#            # Scroll down to bottom
-#            self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-#
-#            # Wait to load page
-#            time.sleep(SCROLL_PAUSE_TIME * 5)
-#
-#            # Calculate new scroll height and compare with last scroll height
-#            new_height = self.driver.execute_script("return document.body.scrollHeight")
-#            if new_height == last_height:
-#                logging.info('Reach the bottom of the page.')
-#                break
-#            last_height = new_height
-
-#        x = self.driver.find_element_by_css_selector(".mn-connections__header")
-#        num_of_connect = x.find_element_by_css_selector(".t-18.t-black.t-normal").text
-#
-#        iter = int(num_of_connect.split(' ')[0].replace(',','')) / 20
-#        logging.warning('{} of iteration'.format(iter))
-#
-#        while iter >= 0:
-#            # Scroll down to bottom
-#            self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-#
-#            # Wait to load page
-#            time.sleep(SCROLL_PAUSE_TIME)
-#
-#            iter -= 1
-
-        counter = 1
-        lenOfPage = self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);var lenOfPage=document.body.scrollHeight;return lenOfPage;")
-        match=False
-        while (match == False):
-            lastCount = lenOfPage
-            time.sleep(SCROLL_PAUSE_TIME * 2)
-            lenOfPage = self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);var lenOfPage=document.body.scrollHeight;return lenOfPage;")
-            logging.warning('Iteration {}'.format(counter))
-            counter += 1
-            if lastCount==lenOfPage:
-                match=True
-
+        ### Scroll to the bottom of connection page ###########
+        LinkedInMessenger.scroll_to_bottom(self.driver)
         logging.warning('Start getting all contacts.')
 
+        ### Pull result from connection page  ################
         result = []
 
         pane = self.driver.find_element_by_css_selector(".mn-connections.mb4.artdeco-card.ember-view")
@@ -175,11 +163,6 @@ class LinkedinMsg(object):
 
         contact.to_csv(LOCAL_PATH + ALL_CONTACTS, index=False)
 
-    def _get_message(self, name):
-
-        return 'Hi {0},\n\nThis is auto LinkedIn message test. Sorry for the interruption. ' \
-               'Thanks.\n\nRandy'.format(name)
-
     def _send_message(self, url, name):
 
         self.driver.get(url)
@@ -194,7 +177,7 @@ class LinkedinMsg(object):
 
             input_box = self.driver.find_element_by_css_selector(".msg-form__contenteditable.t-14.t-black--light."
                                                                  "t-normal.flex-grow-1")
-            msg = self._get_message(name)
+            msg = MsgTemplate.prepare_message(name)
             input_box.send_keys(msg)
 
             time.sleep(SCROLL_PAUSE_TIME)
@@ -209,6 +192,9 @@ class LinkedinMsg(object):
             logging.warning("Fails to message {0}.".format(name))
 
     def batch_message(self):
+        """
+        Batch to send LinkedIn messenge to connection with predefined template.
+        """
 
         contact = pandas.read_csv(LOCAL_PATH + TARGET_CONTACTS, header='infer')
 
@@ -224,20 +210,21 @@ class LinkedinMsg(object):
         all_contacts = self.driver.find_element_by_css_selector(".msg-conversations-container__conversations-list"
                                                                 ".list-style-none.ember-view")
 
-        last_height = self.driver.execute_script('return arguments[0].scrollHeight', all_contacts)
+        #last_height = self.driver.execute_script('return arguments[0].scrollHeight', all_contacts)
 
-        while True:
+        #while True:
 
-            self.driver.execute_script('arguments[0].scrollTop = arguments[0].scrollHeight', all_contacts)
-            time.sleep(SCROLL_PAUSE_TIME * 4)
+        #    self.driver.execute_script('arguments[0].scrollTop = arguments[0].scrollHeight', all_contacts)
+        #    time.sleep(SCROLL_PAUSE_TIME * 4)
 
-            # Calculate new scroll height and compare with last scroll height
-            new_height = self.driver.execute_script('return arguments[0].scrollHeight', all_contacts)
-            if new_height == last_height:
-                logging.warning('Reach the bottom of the page.')
-                break
-            last_height = new_height
+        #    # Calculate new scroll height and compare with last scroll height
+        #    new_height = self.driver.execute_script('return arguments[0].scrollHeight', all_contacts)
+        #    if new_height == last_height:
+        #        logging.warning('Reach the bottom of the page.')
+        #        break
+        #    last_height = new_height
 
+        LinkedInMessenger.scroll_to_bottom(self.driver, all_contacts)
         logging.warning('Start getting all contacts.')
 
         result = []
@@ -271,7 +258,7 @@ class LinkedinMsg(object):
                                 link = one_msg.find_element_by_css_selector(".msg-s-event-listitem__link.ember-view")
                                 tag = link.get_attribute("href")
 
-                                if tag != 'https://www.linkedin.com/in/jyrandy/':
+                                if tag != MY_LINKEDIN:
 
                                     count += 1
                                     pass
@@ -314,7 +301,10 @@ class LinkedinMsg(object):
         contact.to_csv(LOCAL_PATH + 'test1.csv', index=True)
 
     def delete_contact(self):
-
+        """
+        Batch disconnect contacts. Not reversible. Use with cautiously.
+        """
+        
         contact = pandas.read_csv(LOCAL_PATH + DELETE_CONTACTS, header='infer')
         delete_contact = contact[contact['To_Delete'] == 'YES']
 

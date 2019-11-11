@@ -1,2 +1,5 @@
 pw.py
-
+contact.csv
+driver/
+__pycache__/
+ghostdriver.log
