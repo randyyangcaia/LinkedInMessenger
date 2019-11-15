@@ -3,6 +3,7 @@ import pandas
 import logging
 from   config                            import *
 from   MsgTemplate                       import MsgTemplate
+from   retrying                          import retry
 from   selenium                          import webdriver
 from   selenium.webdriver.common.by      import By
 from   selenium.webdriver.support.ui     import WebDriverWait
@@ -67,44 +68,55 @@ class LinkedInMessenger(object):
             logging.warning(str(e))
 
     def _go_to_connection(self):
+        """
+        Go to LinkedIn Connection webpage
+        """        
 
         self.driver.get(LINKEDIN_CONNECTION)
         time.sleep(SCROLL_PAUSE_TIME)
 
     def _go_to_message(self):
+        """
+        Go to LinkedIn Message webpage
+        """
 
         connection_btn = self.driver.find_element_by_id('messaging-tab-icon')
         connection_btn.click()
-
         time.sleep(SCROLL_PAUSE_TIME)
     
-    @staticmethod
-    def scroll_to_bottom(driver, component = None):
+    @retry(stop_max_attempt_number = 5, wait_fixed = 3000)
+    def scroll_action(self, component):
+        """
+        Scroll down action
+        """
         
         scroll_action = "window.scrollTo(0, document.body.scrollHeight);var lenOfPage=document.body.scrollHeight;return lenOfPage;"
-        counter = 1
+
         if component:
-            len_of_page = driver.execute_script(scroll_action, component)
+            return self.driver.execute_script(scroll_action, component)
         else:
-            len_of_page = driver.execute_script(scroll_action)
-        match = False
+            return self.driver.execute_script(scroll_action)    
+        
+    def scroll_to_bottom(self, component = None):
+        """
+        Scroll to the bottom of the webpage
+        """
+
+        counter, match = 1, False
+        len_of_page = self.scroll_action(component)
 
         while (match == False):
 
             last_count = len_of_page
-            time.sleep(SCROLL_PAUSE_TIME * 2)
-            
-            if component:
-                len_of_page = driver.execute_script(scroll_action, component)
-            else:
-                len_of_page = driver.execute_script(scroll_action)
-            
+            time.sleep(SCROLL_PAUSE_TIME)
+            len_of_page = self.scroll_action(component)
+
             logging.warning('Iteration {}'.format(counter))
+            
             counter += 1
             match = last_count == len_of_page
 
         logging.warning('Scroll to the bottom.')
-
 
     def retrieve_all_connection(self, rerun = 'Yes'):
         """
@@ -114,46 +126,38 @@ class LinkedInMessenger(object):
         self._go_to_connection()
 
         ### Scroll to the bottom of connection page ###########
-        LinkedInMessenger.scroll_to_bottom(self.driver)
+        self.scroll_to_bottom()
         logging.warning('Start getting all contacts.')
 
         ### Pull result from connection page  ################
         result = []
 
-        pane = self.driver.find_element_by_css_selector(".mn-connections.mb4.artdeco-card.ember-view")
+        pane = self.driver.find_element_by_css_selector(".mn-connections"
+                                                        ".mb4.artdeco-card.ember-view")
+        li_list = pane.find_elements_by_tag_name("li")
 
-        # start from your target element, here for example, "header"
-        all_li = pane.find_elements_by_tag_name("li")
+        for li in li_list:
 
-        try:
-            for x in all_li:
-                # all_children_by_xpath = x.find_elements_by_xpath(".//*")
+            try:
 
-                try:
+                link = li.find_element_by_css_selector(".mn-connection-card__link"
+                                                       " .ember-view").get_attribute("href")
+                name = li.find_element_by_css_selector(".mn-connection-card__name"
+                                                       ".t-16.t-black.t-bold").text
+                occupation = li.find_element_by_css_selector(".mn-connection-card__occupation"
+                                                             ".t-14.t-black--light.t-normal").text
 
-                    link = x.find_element_by_css_selector(".mn-connection-card__link.ember-view")
-                    tag = link.get_attribute("href")
+                values = [name, occupation, tag]
+                logging.warning(values)
+                result.append(values)
 
-                    name = x.find_element_by_css_selector(".mn-connection-card__name.t-16.t-black.t-bold").text
-
-                    occupation = x.find_element_by_css_selector(".mn-connection-card__occupation.t-14.t-black--light"
-                                                          ".t-normal").text
-
-                    values = [name, occupation, tag]
-                    logging.warning(values)
-
-                    result.append(values)
-
-                except Exception as e:
-                    logging.warning(str(e))
-                    pass
-
-        except Exception as e:
-            print(str(e))
+            except Exception as e:
+                logging.warning(str(e))
+                pass
 
         contact = pandas.DataFrame.from_dict(result)
         contact.columns = ['Name', 'Title', 'URL']
-        logging.warning('All contacts are complete.')
+        logging.warning('All contacts are retrieved.')
 
         if rerun == 'No':
 
@@ -161,121 +165,71 @@ class LinkedInMessenger(object):
             contact = contact.append(old_contact)
             contact.drop_duplicates(inplace=True)
 
-        contact.to_csv(LOCAL_PATH + ALL_CONTACTS, index=False)
-
-    def _send_message(self, url, name):
-
-        self.driver.get(url)
-        time.sleep(SCROLL_PAUSE_TIME)
-
-        try:
-            msg_btn = self.driver.find_element_by_css_selector(".pv-s-profile-actions.pv-s-profile-actions--message."
-                                                           "artdeco-button.artdeco-button--3.mr2.mt2")
-            msg_btn.click()
-
-            time.sleep(SCROLL_PAUSE_TIME)
-
-            input_box = self.driver.find_element_by_css_selector(".msg-form__contenteditable.t-14.t-black--light."
-                                                                 "t-normal.flex-grow-1")
-            msg = MsgTemplate.prepare_message(name)
-            input_box.send_keys(msg)
-
-            time.sleep(SCROLL_PAUSE_TIME)
-
-            send_btn = self.driver.find_element_by_css_selector(".msg-form__send-button.artdeco-button."
-                                                                "artdeco-button--1")
-            send_btn.click()
-
-            logging.warning("Message is delivered to {0}.".format(name))
-
-        except Exception as e:
-            logging.warning("Fails to message {0}.".format(name))
-
-    def batch_message(self):
-        """
-        Batch to send LinkedIn messenge to connection with predefined template.
-        """
-
-        contact = pandas.read_csv(LOCAL_PATH + TARGET_CONTACTS, header='infer')
-
-        for index, row in contact.iterrows():
-
-            self._send_message(row['URL'], row['Name'].split(' ')[0])
-            time.sleep(SCROLL_PAUSE_TIME)
+        contact.to_csv(LOCAL_PATH + ALL_CONTACTS, index=False, encoding='utf_8_sig')
 
     def get_active_connection(self):
-
+        """
+        Retrieve connection with active contact
+        """
         self._go_to_message()
 
         all_contacts = self.driver.find_element_by_css_selector(".msg-conversations-container__conversations-list"
                                                                 ".list-style-none.ember-view")
 
-        #last_height = self.driver.execute_script('return arguments[0].scrollHeight', all_contacts)
-
-        #while True:
-
-        #    self.driver.execute_script('arguments[0].scrollTop = arguments[0].scrollHeight', all_contacts)
-        #    time.sleep(SCROLL_PAUSE_TIME * 4)
-
-        #    # Calculate new scroll height and compare with last scroll height
-        #    new_height = self.driver.execute_script('return arguments[0].scrollHeight', all_contacts)
-        #    if new_height == last_height:
-        #        logging.warning('Reach the bottom of the page.')
-        #        break
-        #    last_height = new_height
-
-        LinkedInMessenger.scroll_to_bottom(self.driver, all_contacts)
+        self.scroll_to_bottom(all_contacts)
         logging.warning('Start getting all contacts.')
 
         result = []
-        # start from your target element, here for example, "header"
-        all_li = all_contacts.find_elements_by_tag_name("li")
+        li_list = all_contacts.find_elements_by_tag_name("li")
 
-        try:
-            for x in all_li:
+        for li in li_list:
 
+            try:
+
+                li.click()
+                time.sleep(SCROLL_PAUSE_TIME)
+
+                name = li.find_element_by_css_selector(".msg-conversation-listitem__participant-names"
+                                                       ".msg-conversation-card__participant-names"
+                                                       ".truncate.pr1.t-16.t-black.t-normal").text
+                logging.warning('{} is retrieved'.format(name))
                 try:
-
-                    x.click()
-                    time.sleep(SCROLL_PAUSE_TIME)
-
-                    name = x.find_element_by_css_selector(".msg-conversation-listitem__participant-names"
-                                                          ".msg-conversation-card__participant-names"
-                                                          ".truncate.pr1.t-16.t-black--light.t-normal").text
-                    print(name)
-                    msg_box = self.driver.find_element_by_css_selector('.msg-s-message-list-container.relative'
-                                                                       '.display-flex.mtA.ember-view')
-
-                    msg_box.click()
-                    time.sleep(SCROLL_PAUSE_TIME)
-
-                    msg_li = msg_box.find_elements_by_tag_name("li")
-
-                    count = 0
-                    for one_msg in msg_li:
-
-                            try:
-                                link = one_msg.find_element_by_css_selector(".msg-s-event-listitem__link.ember-view")
-                                tag = link.get_attribute("href")
-
-                                if tag != MY_LINKEDIN:
-
-                                    count += 1
-                                    pass
-
-                            except Exception as e:
-                                pass
-
-                    print([name, count])
-                    result.append([name, count])
-
+                    message_container = self.driver.find_element_by_css_selector(".msg-s-message-list-container.relative.display-flex.mbA.ember-view")
+                    message_box = message_container.find_element_by_css_selector(".msg-s-message-list-content.full-height.list-style-none.full-width")
                 except Exception as e:
-                    # logging.warning(str(e))
-                    pass
+                    
+                    try:
+                        message_container = self.driver.find_element_by_css_selector(".msg-s-message-list-container.relative.display-flex.mtA.ember-view")
+                        message_box = message_container.find_element_by_css_selector(".msg-s-message-list-content.list-style-none.full-width")
+                    except Exception as e:
+                        # logging.warning(str(e))
+                        pass
 
-        except Exception as e:
-            # print(str(e))
-            pass
+                #message_box.click()
+                time.sleep(SCROLL_PAUSE_TIME)
+
+                message_li = message_box.find_elements_by_css_selector(".msg-s-message-list__event.clearfix")
+
+                count = 0
+                for message in message_li:
+
+                        try:
+                            link = message.find_element_by_css_selector(".msg-s-event-listitem__link.ember-view")
+                            tag = link.get_attribute("href")
+                            
+                            if tag != MY_LINKEDIN:
+
+                                count += 1
+
+                        except Exception as e:
+                            logging.warning(str(e))
+
+                print([name, count])
+                result.append([name, count])
+
+            except Exception as e:
+                logging.warning(str(e))
+                pass
 
         active_contact = pandas.DataFrame.from_dict(result)
         active_contact.columns = ['Name', 'Number_of_Message']
@@ -285,60 +239,4 @@ class LinkedInMessenger(object):
         # old_contact= old_contact.set_index('Name')
         #
         # contact = old_contact.join(active_contact.set_index('Name'), on='Name')
-        active_contact.to_csv(LOCAL_PATH + 'test.csv', index=True)
-
-        return 0
-
-    def merge_table(self):
-
-        old_contact = pandas.read_csv(LOCAL_PATH + ALL_CONTACTS, header='infer')
-        old_contact= old_contact.set_index('Name')
-
-        active_contact = pandas.read_csv(LOCAL_PATH + 'test.csv', header='infer')
-        active_contact = active_contact.set_index('Name')
-
-        contact = old_contact.join(active_contact, on='Name')
-        contact.to_csv(LOCAL_PATH + 'test1.csv', index=True)
-
-    def delete_contact(self):
-        """
-        Batch disconnect contacts. Not reversible. Use with cautiously.
-        """
-        
-        contact = pandas.read_csv(LOCAL_PATH + DELETE_CONTACTS, header='infer')
-        delete_contact = contact[contact['To_Delete'] == 'YES']
-
-        for index, row in delete_contact.iterrows():
-
-            self.driver.get(row['URL'])
-            time.sleep(SCROLL_PAUSE_TIME)
-
-            try:
-                more_btn = self.driver.find_element_by_css_selector('.pv-s-profile-actions__overflow-toggle'
-                                                                    '.artdeco-button.artdeco-button--secondary'
-                                                                    '.artdeco-button--3.artdeco-button--muted'
-                                                                    '.mr2.mt2.artdeco-button.artdeco-button--muted'
-                                                                    '.artdeco-button--2.artdeco-button--secondary'
-                                                                    '.ember-view')
-
-                more_btn.click()
-
-                time.sleep(SCROLL_PAUSE_TIME)
-
-                delete_btn = self.driver.find_element_by_css_selector('.pv-s-profile-actions.'
-                                                                      'pv-s-profile-actions--disconnect.'
-                                                                      'pv-s-profile-actions__overflow-button.'
-                                                                      'full-width.text-align-left')
-
-                delete_btn.click()
-
-                contact = contact[contact['Name'] != row['Name']]
-
-                time.sleep(SCROLL_PAUSE_TIME)
-
-                logging.warning("Delete {0}.".format(row['Name']))
-
-            except Exception as e:
-                logging.warning("Fails to delete {0}.".format(row['Name']))
-
-            contact.to_csv(LOCAL_PATH + ALL_CONTACTS, index=False)
+        active_contact.to_csv(LOCAL_PATH + 'active_contact.csv', index=False, encoding='utf_8_sig')
