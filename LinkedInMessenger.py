@@ -90,12 +90,10 @@ class LinkedInMessenger(object):
         Scroll down action
         """
         
-        scroll_action = "window.scrollTo(0, document.body.scrollHeight);var lenOfPage=document.body.scrollHeight;return lenOfPage;"
-
         if component:
-            return self.driver.execute_script(scroll_action, component)
+            return self.driver.execute_script("arguments[0].scrollTo(0, arguments[0].scrollHeight);var lenOfPage=arguments[0].scrollHeight;return lenOfPage;", component)
         else:
-            return self.driver.execute_script(scroll_action)    
+            return self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);var lenOfPage=document.body.scrollHeight;return lenOfPage;")    
         
     def scroll_to_bottom(self, component = None):
         """
@@ -235,8 +233,16 @@ class LinkedInMessenger(object):
         active_contact.columns = ['Name', 'Number_of_Message']
         logging.warning('All active contacts are complete.')
 
-        # old_contact = pandas.read_csv(LOCAL_PATH + ALL_CONTACTS, header='infer')
-        # old_contact= old_contact.set_index('Name')
-        #
-        # contact = old_contact.join(active_contact.set_index('Name'), on='Name')
         active_contact.to_csv(LOCAL_PATH + 'active_contact.csv', index=False, encoding='utf_8_sig')
+
+    @staticmethod
+    def merge_table():
+
+        old_contact = pandas.read_csv(LOCAL_PATH + ALL_CONTACTS, header='infer')
+        old_contact= old_contact.set_index('Name')
+
+        active_contact = pandas.read_csv(LOCAL_PATH + 'active_contact.csv', header='infer')
+        active_contact = active_contact.set_index('Name')
+
+        contact = old_contact.join(active_contact, on='Name')
+        contact.to_csv(LOCAL_PATH + 'contact_all.csv', index=True)
