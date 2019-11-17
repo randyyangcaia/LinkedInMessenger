@@ -276,7 +276,7 @@ class LinkedInMessenger(object):
         Send messages to target recipients with fixed templates
         """
 
-        email_recipients = pandas.read_csv(LOCAL_PATH + TARGET_CONTACTS, header='infer')
+        email_recipients = pandas.read_csv(LOCAL_PATH + EMAIL_RECIPIENTS, header='infer')
 
         for index, row in email_recipients.iterrows():
 
@@ -288,7 +288,7 @@ class LinkedInMessenger(object):
         Batch to delete connection. Use with caution.
         """
 
-        contact = pandas.read_csv(LOCAL_PATH + DELETE_CONTACTS, header='infer')
+        contact = pandas.read_csv(LOCAL_PATH + ALL_CONTACTS, header='infer')
         delete_contact = contact[contact['To_Delete'] == 'YES']
 
         for index, row in delete_contact.iterrows():
@@ -297,21 +297,24 @@ class LinkedInMessenger(object):
             time.sleep(SCROLL_PAUSE_TIME)
 
             try:
-                more_button = self.driver.find_element_by_css_selector('.pv-s-profile-actions__overflow-toggle'
-                                                                    '.artdeco-button.artdeco-button--secondary'
-                                                                    '.artdeco-button--3.artdeco-button--muted'
-                                                                    '.mr2.mt2.artdeco-button.artdeco-button--muted'
-                                                                    '.artdeco-button--2.artdeco-button--secondary'
-                                                                    '.ember-view')
+                self.driver.execute_script("window.scrollTo(0, 200)")
+                self.driver.save_screenshot('./foto.png')
+                #message_box = self.driver.find_element_by_css_selector('.msg-overlay-bubble-header')
+                #message_box.click()
+                #time.sleep(SCROLL_PAUSE_TIME)
+
+                more_button = self.driver.find_element_by_css_selector('.ml2.pv-s-profile-actions__overflow-toggle'
+                                                                       '.artdeco-button.artdeco-button--muted'
+                                                                       '.artdeco-button--2.artdeco-button--secondary'
+                                                                       '.ember-view')
                 more_button.click()
 
                 time.sleep(SCROLL_PAUSE_TIME)
 
-                delete_button = self.driver.find_element_by_css_selector('.pv-s-profile-actions.'
-                                                                      'pv-s-profile-actions--disconnect.'
-                                                                      'pv-s-profile-actions__overflow-button.'
-                                                                      'full-width.text-align-left')
-
+                delete_button = self.driver.find_element_by_css_selector('.pv-s-profile-actions'
+                                                                         '.pv-s-profile-actions--disconnect'
+                                                                         '.pv-s-profile-actions__overflow-button'
+                                                                         '.full-width.text-align-left.ember-view')
                 delete_button.click()
 
                 contact = contact[contact['Name'] != row['Name']]
@@ -321,9 +324,10 @@ class LinkedInMessenger(object):
                 logging.warning("Delete {0}.".format(row['Name']))
 
             except Exception as e:
+                logging.warning(str(e))
                 logging.warning("Fails to delete {0}.".format(row['Name']))
 
-            contact.to_csv(LOCAL_PATH + ALL_CONTACTS, index=False)
+            contact.to_csv(LOCAL_PATH + ALL_CONTACTS, index=False, encoding='utf_8_sig')
 
     @staticmethod
     def merge_table():
@@ -335,4 +339,4 @@ class LinkedInMessenger(object):
         active_contact = active_contact.set_index('Name')
 
         contact = old_contact.join(active_contact, on='Name')
-        contact.to_csv(LOCAL_PATH + 'contact_all.csv', index=True)
+        contact.to_csv(LOCAL_PATH + 'all_contact.csv', index=True, encoding='utf_8_sig')

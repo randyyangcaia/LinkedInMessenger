@@ -1,6 +1,6 @@
-LOCAL_PATH          = r'/Users/jieyang/Desktop/LinkedInMessenger/'
-ALL_CONTACTS        = r'contact.csv'
-TARGET_CONTACTS     = r'target.csv'
+LOCAL_PATH          = r'/Users/jieyang/Desktop/LinkedInMessenger/result/'
+ALL_CONTACTS        = r'all_contact.csv'
+EMAIL_RECIPIENTS    = r'email_recipient.csv'
 DELETE_CONTACTS     = r'delete_contact.csv'
 SCROLL_PAUSE_TIME   = 3
 
