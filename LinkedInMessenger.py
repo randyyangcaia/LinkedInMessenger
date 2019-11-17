@@ -234,6 +234,96 @@ class LinkedInMessenger(object):
         logging.warning('All active contacts are complete.')
 
         active_contact.to_csv(LOCAL_PATH + 'active_contact.csv', index=False, encoding='utf_8_sig')
+    
+    def send_message(self, url, name):
+        """
+        Send message to target recipient
+        """
+
+        self.driver.get(url)
+        time.sleep(SCROLL_PAUSE_TIME)
+
+        try:
+            message_button = self.driver.find_element_by_css_selector('.pv-s-profile-actions'
+                                                                      '.pv-s-profile-actions--message'
+                                                                      '.ml2.artdeco-button.artdeco-button--2'
+                                                                      '.artdeco-button--primary.ember-view')
+
+            message_button.click()
+
+            time.sleep(SCROLL_PAUSE_TIME)
+
+            input_box = self.driver.find_element_by_css_selector('.msg-form__contenteditable'
+                                                                 '.t-14.t-black--light.'
+                                                                 't-normal.flex-grow-1.notranslate')
+            message = MsgTemplate.prepare_message(name)
+            input_box.send_keys(message)
+
+            time.sleep(SCROLL_PAUSE_TIME)
+
+            send_button = self.driver.find_element_by_css_selector('.msg-form__send-button.artdeco-button'
+                                                                   '.artdeco-button--1')
+            send_button.click()
+
+            logging.warning("Message is delivered to {0}.".format(name))
+
+        except Exception as e:
+            logging.warning(str(e))
+            logging.warning("Fails to message {0}.".format(name))
+
+    def batch_message(self):
+        """
+        Send messages to target recipients with fixed templates
+        """
+
+        email_recipients = pandas.read_csv(LOCAL_PATH + TARGET_CONTACTS, header='infer')
+
+        for index, row in email_recipients.iterrows():
+
+            self.send_message(row['URL'], row['Name'].split(' ')[0])
+            time.sleep(SCROLL_PAUSE_TIME)
+    
+    def delete_contact(self):
+        """
+        Batch to delete connection. Use with caution.
+        """
+
+        contact = pandas.read_csv(LOCAL_PATH + DELETE_CONTACTS, header='infer')
+        delete_contact = contact[contact['To_Delete'] == 'YES']
+
+        for index, row in delete_contact.iterrows():
+
+            self.driver.get(row['URL'])
+            time.sleep(SCROLL_PAUSE_TIME)
+
+            try:
+                more_button = self.driver.find_element_by_css_selector('.pv-s-profile-actions__overflow-toggle'
+                                                                    '.artdeco-button.artdeco-button--secondary'
+                                                                    '.artdeco-button--3.artdeco-button--muted'
+                                                                    '.mr2.mt2.artdeco-button.artdeco-button--muted'
+                                                                    '.artdeco-button--2.artdeco-button--secondary'
+                                                                    '.ember-view')
+                more_button.click()
+
+                time.sleep(SCROLL_PAUSE_TIME)
+
+                delete_button = self.driver.find_element_by_css_selector('.pv-s-profile-actions.'
+                                                                      'pv-s-profile-actions--disconnect.'
+                                                                      'pv-s-profile-actions__overflow-button.'
+                                                                      'full-width.text-align-left')
+
+                delete_button.click()
+
+                contact = contact[contact['Name'] != row['Name']]
+
+                time.sleep(SCROLL_PAUSE_TIME)
+
+                logging.warning("Delete {0}.".format(row['Name']))
+
+            except Exception as e:
+                logging.warning("Fails to delete {0}.".format(row['Name']))
+
+            contact.to_csv(LOCAL_PATH + ALL_CONTACTS, index=False)
 
     @staticmethod
     def merge_table():
